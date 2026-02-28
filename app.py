@@ -8,41 +8,47 @@ import threading
 import os
 
 app = Flask(__name__)
-# Allow all origins — required for Railway since your frontend URL will be different
 CORS(app)
 
 # ── Email config ──────────────────────────────────────────────────────────────
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 465
 SMTP_USER = os.getenv("SMTP_USER", "jishat5000@gmail.com")
-# BUG FIX 6: strip spaces from App Password (Google shows it with spaces, must remove them)
 SMTP_PASS = os.getenv("SMTP_PASS", "caaszodpaugjIdun")
 
 active_jobs: dict = {}
 
 
+# ── Root route — prevents 404 on "/" ─────────────────────────────────────────
+@app.route("/")
+def index():
+    return jsonify({"message": "Event Countdown API is running"}), 200
+
+
+# ── Email sender ──────────────────────────────────────────────────────────────
 def send_notification_email(event_name: str, to_email: str, notify_type: str = "start"):
     try:
         msg = MIMEMultipart("alternative")
 
         if notify_type == "reminder_1day":
-            subject = f"⏰ 1 Day Until '{event_name}'!"
-            heading = "Tomorrow is the big day!"
+            subject   = f"⏰ 1 Day Until '{event_name}'!"
+            heading   = "Tomorrow is the big day!"
             body_text = f"Your event <strong>{event_name}</strong> is happening <strong>tomorrow</strong>. Get ready!"
+            icon      = "⏰"
         elif notify_type == "reminder_1hour":
-            subject = f"🔔 1 Hour Until '{event_name}'!"
-            heading = "Just 1 hour to go!"
+            subject   = f"🔔 1 Hour Until '{event_name}'!"
+            heading   = "Just 1 hour to go!"
             body_text = f"Your event <strong>{event_name}</strong> starts in <strong>1 hour</strong>. Almost there!"
+            icon      = "🔔"
         else:
-            subject = f"🎉 '{event_name}' Has Started!"
-            heading = "Your event is live!"
+            subject   = f"🎉 '{event_name}' Has Started!"
+            heading   = "Your event is live!"
             body_text = f"Your event <strong>{event_name}</strong> has just <strong>started</strong>. Enjoy every moment!"
+            icon      = "🎉"
 
         msg["Subject"] = subject
         msg["From"]    = SMTP_USER
         msg["To"]      = to_email
-
-        icon = '🎉' if notify_type == 'start' else ('⏰' if notify_type == 'reminder_1day' else '🔔')
 
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>
@@ -73,11 +79,15 @@ def send_notification_email(event_name: str, to_email: str, notify_type: str = "
             server.login(SMTP_USER, SMTP_PASS)
             server.sendmail(SMTP_USER, to_email, msg.as_string())
 
-        print(f"[Email sent] type={notify_type} to={to_email} event='{event_name}'")
+        print(f"[Email OK] type={notify_type} to={to_email} event='{event_name}'")
+
+    except smtplib.SMTPAuthenticationError:
+        print("[Email ERROR] Authentication failed — check App Password")
     except Exception as e:
-        print(f"[Email Error] {e}")
+        print(f"[Email ERROR] {e}")
 
 
+# ── Timer helper ──────────────────────────────────────────────────────────────
 def schedule_timer(delay_seconds: float, job_id: str, fn, *args):
     if delay_seconds <= 0:
         return
@@ -87,35 +97,34 @@ def schedule_timer(delay_seconds: float, job_id: str, fn, *args):
     active_jobs[job_id] = t
 
 
+# ── API: start countdown ──────────────────────────────────────────────────────
 @app.route("/api/start-countdown", methods=["POST"])
 def start_countdown():
-    data = request.get_json()
-    event_name     = (data.get("event_name") or "").strip()
-    event_date_str = (data.get("event_date") or "").strip()
-    email          = (data.get("email") or "").strip()
+    data           = request.get_json()
+    event_name     = (data.get("event_name")  or "").strip()
+    event_date_str = (data.get("event_date")  or "").strip()
+    email          = (data.get("email")       or "").strip()
 
     if not event_name or not event_date_str or not email:
         return jsonify({"error": "event_name, event_date, and email are required"}), 400
 
     try:
-        # BUG FIX 7: replace trailing Z with +00:00 so fromisoformat() works on
-        # ALL Python versions (3.7+). Python < 3.11 does not accept the Z suffix.
         event_dt = datetime.fromisoformat(event_date_str.replace("Z", "+00:00"))
     except ValueError:
         return jsonify({"error": "Invalid date format."}), 400
 
-    now = datetime.now(timezone.utc)
-
-    # BUG FIX 8: make event_dt timezone-aware if it somehow arrived naive
     if event_dt.tzinfo is None:
         event_dt = event_dt.replace(tzinfo=timezone.utc)
 
+    now           = datetime.now(timezone.utc)
     total_seconds = (event_dt - now).total_seconds()
 
     if total_seconds <= 0:
         return jsonify({"error": "Event date must be in the future"}), 400
 
-    base_id = f"{email}|{event_name}"
+    base_id  = f"{email}|{event_name}"
+    one_day  = 86400
+    one_hour = 3600
 
     for suffix in ("_start", "_1day", "_1hour"):
         jid = base_id + suffix
@@ -123,18 +132,20 @@ def start_countdown():
             active_jobs[jid].cancel()
             del active_jobs[jid]
 
-    one_day  = 86400
-    one_hour = 3600
-
-    schedule_timer(total_seconds,            base_id + "_start",  send_notification_email, event_name, email, "start")
+    schedule_timer(total_seconds, base_id + "_start",
+                   send_notification_email, event_name, email, "start")
     if total_seconds > one_day:
-        schedule_timer(total_seconds - one_day,  base_id + "_1day",  send_notification_email, event_name, email, "reminder_1day")
+        schedule_timer(total_seconds - one_day, base_id + "_1day",
+                       send_notification_email, event_name, email, "reminder_1day")
     if total_seconds > one_hour:
-        schedule_timer(total_seconds - one_hour, base_id + "_1hour", send_notification_email, event_name, email, "reminder_1hour")
+        schedule_timer(total_seconds - one_hour, base_id + "_1hour",
+                       send_notification_email, event_name, email, "reminder_1hour")
+
+    print(f"[Countdown] Started '{event_name}' — {int(total_seconds)}s remaining")
 
     return jsonify({
-        "message": "Countdown started successfully",
-        "job_id": base_id,
+        "message":           "Countdown started successfully",
+        "job_id":            base_id,
         "seconds_remaining": int(total_seconds),
         "reminders_scheduled": {
             "at_event":        True,
@@ -144,6 +155,7 @@ def start_countdown():
     }), 200
 
 
+# ── API: cancel countdown ─────────────────────────────────────────────────────
 @app.route("/api/cancel-countdown", methods=["POST"])
 def cancel_countdown():
     data   = request.get_json()
@@ -162,15 +174,18 @@ def cancel_countdown():
     return jsonify({"error": "No active job found"}), 404
 
 
+# ── API: status ───────────────────────────────────────────────────────────────
 @app.route("/api/status", methods=["GET"])
 def status():
-    return jsonify({"status": "running", "active_timers": len(active_jobs), "jobs": list(active_jobs.keys())}), 200
+    return jsonify({
+        "status":        "running",
+        "active_timers": len(active_jobs),
+        "jobs":          list(active_jobs.keys())
+    }), 200
 
 
+# ── This block is for local dev only — gunicorn ignores it on Railway ─────────
 if __name__ == "__main__":
-    # Railway injects a PORT environment variable — must use it or deployment fails
     port = int(os.getenv("PORT", 5000))
-    print("=" * 50)
-    print(f"  Backend running on port {port}")
-    print("=" * 50)
     app.run(host="0.0.0.0", port=port, debug=False)
+
