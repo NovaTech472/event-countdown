@@ -1,4 +1,4 @@
-const API = "http://127.0.0.1:5000/api";
+const API = "https://event-countdown-production.up.railway.app/api";
 let activeTimer = null;
 let currentJobId = null;
 
