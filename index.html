@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Countdown</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+
+<main class="container">
+
+  <header class="site-header">
+    <div class="orb"></div>
+    <p class="label">— countdown timer —</p>
+    <h1>Mark the<br><em>Moment</em></h1>
+    <p class="sub">Set your event. We'll remind you as it approaches.</p>
+  </header>
+
+  <section class="card" id="formCard">
+    <div class="field">
+      <label for="eventName">Event Name</label>
+      <input type="text" id="eventName" placeholder="e.g. Product Launch, Birthday…" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="eventDate">Event Date</label>
+      <input type="date" id="eventDate">
+    </div>
+    <div class="field">
+      <label for="email">Notify Email</label>
+      <input type="email" id="email" placeholder="you@example.com">
+    </div>
+
+    <div class="reminders-note">
+      📬 You'll receive reminders <strong>1 day before</strong>, <strong>1 hour before</strong>, and <strong>when it starts</strong>.
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="startBtn" onclick="startCountdown()">
+        <span class="btn-text">Start Countdown</span>
+        <span class="btn-icon">→</span>
+      </button>
+      <button class="btn-cancel" id="cancelBtn" onclick="cancelCountdown()" style="display:none">
+        Cancel
+      </button>
+    </div>
+
+    <div class="status-msg" id="statusMsg"></div>
+  </section>
+
+  <section class="countdown-display" id="countdownDisplay" style="display:none">
+    <p class="event-title-display" id="eventTitleDisplay"></p>
+    <div class="time-blocks">
+      <div class="block"><span id="cntDays">00</span><small>days</small></div>
+      <div class="sep">:</div>
+      <div class="block"><span id="cntHours">00</span><small>hrs</small></div>
+      <div class="sep">:</div>
+      <div class="block"><span id="cntMins">00</span><small>min</small></div>
+      <div class="sep">:</div>
+      <div class="block"><span id="cntSecs">00</span><small>sec</small></div>
+    </div>
+  </section>
+
+  <div class="started-banner" id="startedBanner" style="display:none">
+    🎉 <strong id="startedEventName"></strong> has started!
+  </div>
+
+</main>
+
+<script src="script.js"></script>
+</body>
+</html>
